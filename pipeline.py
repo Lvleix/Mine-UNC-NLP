@@ -12,6 +12,10 @@ print("read in wikis ... ")
 files = os.listdir(wpath)
 wikis = {}
 for file in files:
+    """
+    if file not in ["wiki-001.jsonl"]:
+        continue
+    """
     print(file)
     f = open(wpath+"/"+file, "r")
     for line in f:
@@ -29,8 +33,11 @@ print("wiki dict completed. ")
 # "Savages (band)" == "Savages_-LRB-band-RRB-"
 
 with open(mpath+"/train.jsonl","r") as f:
+#with open(spath + "/new_train_set.jsonl", "r") as f:
     train_data = [eval(line.replace("null","''")) for line in f]
-with open(mpath+"/shared_task_dev_public.jsonl","r") as f:
+
+with open(mpath+"/shared_task_dev.jsonl","r") as f:
+#with open(spath + "/new_dev_set.jsonl", "r") as f:
     dev_data = [eval(line.replace("null","''")) for line in f]
 
 if mode == "train":
