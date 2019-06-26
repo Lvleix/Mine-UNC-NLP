@@ -1,11 +1,13 @@
 import gensim
 import numpy as np
+import nltk.tokenize as tk
 
 class gloveModel:
 	def __init__(self, path):
 		print("Now load in glove model.")
 		self.model = gensim.models.KeyedVectors.load_word2vec_format(path, binary=False)
 		print("Model loaded!")
+		self.tokenizer = tk.WordPunctTokenizer()
 		pass
 
 	def wordsEmbedding(self, words):
@@ -14,6 +16,15 @@ class gloveModel:
 			if word in self.model:
 				res.append(self.model[word])
 		return np.array(res)
+
+	def doc_retr_embed(self, data):
+		return self.wordsEmbedding(self.tokenizer.tokenize(data))
+
+	def sen_sele_embed(self, data):
+		return self.wordsEmbedding(self.tokenizer.tokenize(data))
+
+	def cla_veri_embed(self, data):
+		return self.wordsEmbedding(self.tokenizer.tokenize(data))
 
 if __name__ == "__main__":
 	test = ["I","love","apples"]

@@ -1,14 +1,16 @@
 import numpy as np
 import math
 import heapq
+from Net import SemanticNet
 
 def sm(l, i):
     return math.exp(l[i])/sum([math.exp(ele) for ele in l])
 
 class sen_sele_train():
-    def __init__(self, train_data, wikis, batch_size=128, embedding_size=50):
+    def __init__(self, train_data, wikis, embedding_class, batch_size=128, embedding_size=50):
         self.train_data = train_data
         self.wikis = wikis
+        self.embedding_class = embedding_class
         self.batch_size = batch_size
         self.embedding_size = embedding_size
         self.pad = [[0. for _ in range(self.embedding_size)]]
@@ -45,8 +47,8 @@ class sen_sele_train():
             data2_batch = self.dataset2[start_i: start_i + batch_size]  # evidence
             label_batch = self.labelset[start_i: start_i + batch_size]
 
-            data1_batch_embedding = [sen_sele_embed(data) for data in data1_batch]
-            data2_batch_embedding = [sen_sele_embed(data) for data in data2_batch]
+            data1_batch_embedding = [self.embedding_class.sen_sele_embed(data) for data in data1_batch]
+            data2_batch_embedding = [self.embedding_class.sen_sele_embed(data) for data in data2_batch]
 
             pad_data1_batch_embedding = np.array(pad_batch(data1_batch_embedding, pad))
             pad_data2_batch_embedding = np.array(pad_batch(data2_batch_embedding, pad))
@@ -56,8 +58,9 @@ class sen_sele_train():
 
 
 class sen_sele_infer():
-    def __init__(self, wikis, model):
+    def __init__(self, wikis, embedding_class, model):
         self.wikis = wikis
+        self.embedding_class = embedding_class
         self.load_model(model)
 
 
@@ -65,8 +68,8 @@ class sen_sele_infer():
         pass
 
     def use_model(self, data1, data2):
-        input1 = sen_sele_embed(data1)
-        input2 = sen_sele_embed(data2)
+        input1 = self.embedding_class.sen_sele_embed(data1)
+        input2 = self.embedding_class.sen_sele_embed(data2)
         mp=1
         mm=0
         return mp,mm

@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import heapq
+from Net import SemanticNet
 from phases import doc_retr
 from phases import sen_sele
 
@@ -8,13 +9,14 @@ def sm(l, i):
     return math.exp(l[i])/sum([math.exp(ele) for ele in l])
 
 class cla_veri_train():
-    def __init__(self, train_data, wikis, doc_retr_model, sen_sele_model, batch_size=32, embedding_size=50):
+    def __init__(self, train_data, wikis, embedding_class, doc_retr_model, sen_sele_model, batch_size=32, embedding_size=50):
         self.train_data = train_data
         self.wikis = wikis
+        self.embedding_class = embedding_class
         self.batch_size = batch_size
         self.embedding_size = embedding_size
-        self.doc_retr_class = doc_retr.doc_retr_infer(wikis,doc_retr_model)
-        self.sen_sele_class = sen_sele.sen_sele_infer(wikis,sen_sele_model)
+        self.doc_retr_class = doc_retr.doc_retr_infer(wikis,doc_retr_model,embedding_class)
+        self.sen_sele_class = sen_sele.sen_sele_infer(wikis,sen_sele_model,embedding_class)
         self.pad = [[0. for _ in range(self.embedding_size)]]
         self.dataset1 = []
         self.dataset2 = []
@@ -48,8 +50,8 @@ class cla_veri_train():
             data2_batch = self.dataset2[start_i: start_i + batch_size]  # evidence
             label_batch = self.labelset[start_i: start_i + batch_size]
 
-            data1_batch_embedding = [cla_veri_embed(data) for data in data1_batch]
-            data2_batch_embedding = [cla_veri_embed(data) for data in data2_batch]
+            data1_batch_embedding = [self.embedding_class.cla_veri_embed(data) for data in data1_batch]
+            data2_batch_embedding = [self.embedding_class.cla_veri_embed(data) for data in data2_batch]
 
             pad_data1_batch_embedding = np.array(pad_batch(data1_batch_embedding, pad))
             pad_data2_batch_embedding = np.array(pad_batch(data2_batch_embedding, pad))
@@ -59,8 +61,9 @@ class cla_veri_train():
 
 
 class cla_veri_infer():
-    def __init__(self, wikis, model):
+    def __init__(self, wikis, embedding_class, model):
         self.wikis = wikis
+        self.embedding_class = embedding_class
         self.load_model(model)
 
 
@@ -68,8 +71,8 @@ class cla_veri_infer():
         pass
 
     def use_model(self, data1, data2):
-        input1 = cla_veri_embed(data1)
-        input2 = cla_veri_embed(data2)
+        input1 = self.embedding_class.cla_veri_embed(data1)
+        input2 = self.embedding_class.cla_veri_embed(data2)
         su=1
         re=0
         no=0

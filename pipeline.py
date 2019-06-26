@@ -2,11 +2,18 @@ import os
 from phases import doc_retr
 from phases import sen_sele
 from phases import cla_veri
+import Net
+import Net.SemanticNet
+import embedding_util
+import embedding_util.glove_embedding as glove_embedding
 
 mode = "test"  # "train","infer","test"
 spath = os.path.dirname(__file__)
 mpath = os.path.dirname(spath)
 wpath = mpath + "/wiki-pages"
+epath = os.path.dirname(mpath)+"/lab2/glove.6B/glove.6B.50d.txt"
+
+embedding_class = glove_embedding.gloveModel(epath)
 
 print("read in wikis ... ")
 files = os.listdir(wpath)
@@ -43,13 +50,13 @@ with open(mpath+"/shared_task_dev.jsonl","r") as f:
 if mode == "train":
     doc_retr_model = ""
     sen_sele_model = ""
-    doc_retr_class = doc_retr.doc_retr_train(train_data, wikis)
+    doc_retr_class = doc_retr.doc_retr_train(train_data, wikis, embedding_class)
     doc_retr_class.train()
     del doc_retr_class
-    sen_sele_class = sen_sele.sen_sele_train(train_data,wikis)
+    sen_sele_class = sen_sele.sen_sele_train(train_data,wikis, embedding_class)
     sen_sele_class.train()
     del sen_sele_class
-    cla_veri_class = cla_veri.cla_veri_train(train_data,wikis,doc_retr_model,sen_sele_model)
+    cla_veri_class = cla_veri.cla_veri_train(train_data,wikis,embedding_class,doc_retr_model,sen_sele_model)
     cla_veri_class.train()
     del cla_veri_class
 elif mode == "infer":
@@ -57,9 +64,9 @@ elif mode == "infer":
     doc_retr_model = ""
     sen_sele_model = ""
     cla_veri_model = ""
-    doc_retr_class = doc_retr.doc_retr_infer(wikis,doc_retr_model)
-    sen_sele_class = sen_sele.sen_sele_infer(wikis,sen_sele_model)
-    cla_veri_class = cla_veri.cla_veri_infer(wikis,cla_veri_model)
+    doc_retr_class = doc_retr.doc_retr_infer(wikis,embedding_class,doc_retr_model)
+    sen_sele_class = sen_sele.sen_sele_infer(wikis,embedding_class,sen_sele_model)
+    cla_veri_class = cla_veri.cla_veri_infer(wikis,embedding_class,cla_veri_model)
     docs = doc_retr_class.infer(claim)
     sens = sen_sele_class.infer(claim,docs)
     result = cla_veri_class.infer(claim,sens)
@@ -69,9 +76,9 @@ elif mode == "test":
     doc_retr_model = ""
     sen_sele_model = ""
     cla_veri_model = ""
-    doc_retr_class = doc_retr.doc_retr_infer(wikis, doc_retr_model)
-    sen_sele_class = sen_sele.sen_sele_infer(wikis, sen_sele_model)
-    cla_veri_class = cla_veri.cla_veri_infer(wikis, cla_veri_model)
+    doc_retr_class = doc_retr.doc_retr_infer(wikis, embedding_class, doc_retr_model)
+    sen_sele_class = sen_sele.sen_sele_infer(wikis, embedding_class, sen_sele_model)
+    cla_veri_class = cla_veri.cla_veri_infer(wikis, embedding_class, cla_veri_model)
     counts = 0
     rights = 0
     for test in dev_data:

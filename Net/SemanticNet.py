@@ -71,7 +71,7 @@ class NSMN(nn.Module):
 		m = F.softmax(m, dim=1)
 		return m
 
-	def train_batch(self, batch_u, batch_v, batch_tags, learning_rate = 0.1):
+	def train_batch(self, batch_u, batch_v, batch_tags, learning_rate = 0.001):
 		batch_size, _, _ =batch_u.size() 
 		
 		self.zero_grad()
@@ -82,12 +82,12 @@ class NSMN(nn.Module):
 		return
 
 if __name__ == '__main__':
-	tag1 = torch.tensor([1,1,1,1,1,1,1,1,1,1]).cuda()
-	tag2 = torch.tensor([0,0,0,0,0,0,0,0,0,0]).cuda()
-	model = NSMN(5,4,4,3,hidden_dim = 3, lstm_layers = 2, classify_num = 2, use_gpu = True).cuda()
+	tag1 = torch.tensor([1,1,1,1,1,1,1,1,1,1])
+	tag2 = torch.tensor([0,0,0,0,0,0,0,0,0,0])
+	model = NSMN(5,4,4,3,hidden_dim = 3, lstm_layers = 2, classify_num = 2, use_gpu = False)
 
-	u = torch.rand(10,4,5).cuda()
-	v = torch.rand(10,4,5).cuda()
+	u = torch.rand(10,4,5)
+	v = torch.rand(10,4,5)
 
 	new_u = torch.cat((u,u),0)
 	new_v = torch.cat((u,v),0)
