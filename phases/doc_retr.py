@@ -3,18 +3,22 @@ from nltk.corpus import wordnet as wn
 import math
 import heapq
 from Net import SemanticNet
+import sys
 
 def sm(l, i):
     return math.exp(l[i])/sum([math.exp(ele) for ele in l])
 
 class doc_retr_train():
-    def __init__(self, train_data, wikis, embedding_class, batch_size=128, embedding_size=50):
+    def __init__(self, train_data, wikis, embedding_class, model_path, epoches = 1, batch_size=128, embedding_size=50):
         self.train_data = train_data
         self.wikis = wikis
         self.embedding_class = embedding_class
+        self.model_path = model_path
         self.batch_size = batch_size
         self.embedding_size = embedding_size
+        self.epoches = epoches
         self.pad = [[0. for _ in range(self.embedding_size)]]
+        self.NSMN = SemanticNet.NSMN(embedding_size,3,3,3,hidden_dim=3,lstm_layers=3,classify_num=2)
         self.dataset1 = []
         self.dataset2 = []
         self.labelset = []
@@ -25,18 +29,25 @@ class doc_retr_train():
                     continue
                 if "-LRB-" in evid[2] and "-RRB-" in evid[2]:
                     self.dataset1.append(data["claim"])
-                    self.dataset2.append(evid[2]+wikis[evid[2]][0])
+                    self.dataset2.append(evid[2]+" . "+wikis[evid[2]][0])
                     self.labelset.append(0)
                     tmps = evid[2].split("-LRB-")[0]
                     for title in wikis:
                         if tmps in title and "-LRB-" in title and "-RRB-" in title and title != evid[2]:
                             if title.split("-LRB-")[0] == tmps:
                                 self.dataset1.append(data["claim"])
-                                self.dataset2.append(title+wikis[title][0])
+                                self.dataset2.append(title+" . "+wikis[title][0])
                                 self.labelset.append(1)
+        print("train data process complete")
+        print(len(self.train_data),len(self.dataset1),len(self.dataset2),len(self.labelset))
 
     def train(self):
-        pass
+        for epoch in range(self.epoches):
+            for i, (data1_batch, data2_batch, label_batch) in enumerate(self.get_batches(self.batch_size,self.pad)):
+                loss = self.NSMN.train_batch(data1_batch,data2_batch,label_batch)
+                print("Epoch %d batch %d: loss %s" % (epoch,i,float(loss)))
+        self.NSMN.save_model(self.model_path)
+
 
     def get_batches(self,batch_size,pad):
         def pad_batch(batch, pad):
@@ -61,20 +72,24 @@ class doc_retr_train():
 
 
 class doc_retr_infer():
-    def __init__(self, wikis, embedding_class, model):
+    def __init__(self, wikis, embedding_class, model, embedding_size=50):
         self.wikis = wikis
         self.embedding_class = embedding_class
+        self.NSMN = SemanticNet.NSMN(embedding_size,3,3,3,hidden_dim=3,lstm_layers=3,classify_num=2)
         self.load_model(model)
 
 
     def load_model(self, model):
-        pass
+        self.NSMN.load_model(model)
 
     def use_model(self, data1, data2):
-        input1 = self.embedding_class.doc_retr_embed(data1)
-        input2 = self.embedding_class.doc_retr_embed(data2)
-        mp=1
-        mm=0
+        input1 = np.array(self.embedding_class.doc_retr_embed(data1))
+        input2 = np.array(self.embedding_class.doc_retr_embed(data2))
+        if len(input1) == 0 or len(input2) == 0:
+            return 0,1
+        res = self.NSMN.inference_once(input1,input2)
+        mp=res[0]
+        mm=res[1]
         return mp,mm
 
     def infer(self, claim, Singularization=False, threshold=0.5, k=5):
@@ -96,7 +111,7 @@ class doc_retr_infer():
         for doc in docs_disambi:
             mp,mm = self.use_model(claim, doc+self.wikis[doc][0])
             score = sm([mp,mm],0)
-            if score > threshold:
+            if score >= threshold:
                 disambi_scores.append((doc, score))
         return [(doc,1.) for doc in docs]+heapq.nlargest(k,disambi_scores,key=lambda x: x[1])
         #return docs+[item[0] for item in heapq.nlargest(k,disambi_scores,key=lambda x: x[1])]

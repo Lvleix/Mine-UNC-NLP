@@ -9,15 +9,18 @@ def sm(l, i):
     return math.exp(l[i])/sum([math.exp(ele) for ele in l])
 
 class cla_veri_train():
-    def __init__(self, train_data, wikis, embedding_class, doc_retr_model, sen_sele_model, batch_size=32, embedding_size=50):
+    def __init__(self, train_data, wikis, embedding_class, doc_retr_model, sen_sele_model, model_path, epoches=1, batch_size=32, embedding_size=50):
         self.train_data = train_data
         self.wikis = wikis
         self.embedding_class = embedding_class
+        self.model_path = model_path
+        self.epoches = epoches
         self.batch_size = batch_size
         self.embedding_size = embedding_size
-        self.doc_retr_class = doc_retr.doc_retr_infer(wikis,doc_retr_model,embedding_class)
-        self.sen_sele_class = sen_sele.sen_sele_infer(wikis,sen_sele_model,embedding_class)
+        self.doc_retr_class = doc_retr.doc_retr_infer(wikis,embedding_class,doc_retr_model,self.embedding_size)
+        self.sen_sele_class = sen_sele.sen_sele_infer(wikis,embedding_class,sen_sele_model,self.embedding_size)
         self.pad = [[0. for _ in range(self.embedding_size)]]
+        self.NSMN = SemanticNet.NSMN(embedding_size,3,3,3,hidden_dim=3,lstm_layers=3,classify_num=3)
         self.dataset1 = []
         self.dataset2 = []
         self.labelset = []
@@ -28,15 +31,22 @@ class cla_veri_train():
                 self.dataset2.append(" ".join([wikis[evid[2]][evid[3]] for evid in evids]))
                 self.labelset.append({"SUPPORTS":0,"REFUTES":1,"NOT ENOUGH INFO":2}[data["label"]])
             else:
-                docs = self.doc_retr_class.infer(data["claim"])
-                sens = self.sen_sele_class.infer(data["claim"],docs)
+                docs = self.doc_retr_class.infer(data["claim"],threshold=0)
+                sens = self.sen_sele_class.infer(data["claim"],docs,threshold=0)
+                if len(sens) == 0:
+                    continue
                 self.dataset1.append(data["claim"])
-                self.dataset2.append(" ".join(sens[:5]))
+                self.dataset2.append(" ".join([sen for sen,score in sens][:5]))
                 self.labelset.append(2)
+        print("train data process complete")
 
 
     def train(self):
-        pass
+        for epoch in range(self.epoches):
+            for i, (data1_batch, data2_batch, label_batch) in enumerate(self.get_batches(self.batch_size,self.pad)):
+                loss = self.NSMN.train_batch(data1_batch,data2_batch,label_batch)
+                print("Epoch %d batch %d: loss %s" % (epoch,i,float(loss)))
+        self.NSMN.save_model(self.model_path)
 
     def get_batches(self,batch_size,pad):
         def pad_batch(batch, pad):
@@ -61,25 +71,31 @@ class cla_veri_train():
 
 
 class cla_veri_infer():
-    def __init__(self, wikis, embedding_class, model):
+    def __init__(self, wikis, embedding_class, model, embedding_size=50):
         self.wikis = wikis
         self.embedding_class = embedding_class
+        self.NSMN = SemanticNet.NSMN(embedding_size,3,3,3,hidden_dim=3,lstm_layers=3,classify_num=3)
         self.load_model(model)
 
 
     def load_model(self, model):
-        pass
+        self.NSMN.load_model(model)
 
     def use_model(self, data1, data2):
-        input1 = self.embedding_class.cla_veri_embed(data1)
-        input2 = self.embedding_class.cla_veri_embed(data2)
-        su=1
-        re=0
-        no=0
+        input1 = np.array(self.embedding_class.doc_retr_embed(data1))
+        input2 = np.array(self.embedding_class.doc_retr_embed(data2))
+        if len(input1) == 0 or len(input2) == 0:
+            return 0,0,1
+        res = self.NSMN.inference_once(input1, input2)
+        su=res[0]
+        re=res[1]
+        no=res[2]
         return su,re,no
 
     def infer(self, claim, sens):
-        su,re,no = self.use_model(claim, " ".join(sens))
+        if sens == []:
+            return (2,1)
+        su,re,no = self.use_model(claim, " ".join([sen for sen,score in sens]))
         return heapq.nlargest(1,[(0,su),(1,re),(2,no)],key=lambda x: x[1])[0]
 
 
