@@ -2,9 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import numpy as np
 
 class NSMN(nn.Module):
-	def __init__(self, d0, d1, d2, d3, hidden_dim = 3, lstm_layers = 1, classify_num = 2, use_gpu = False):
+	#内部方法
+	def __init__(self, d0, d1, d2, d3, hidden_dim = 3, lstm_layers = 1, classify_num = 2, use_gpu = False, learning_rate = 0.01):
 		super(NSMN, self).__init__()
 		self.embedding_dim = d0
 		#输出层类别数
@@ -23,12 +25,12 @@ class NSMN(nn.Module):
 		self.matching_lstm = nn.LSTM(d2, d3, batch_first = True, num_layers = lstm_layers)
 		#仿射函数
 		self.f_function = nn.Linear(4*d1, d2)
-		self.h_function_l1 = nn.Linear(4*d3, 3)
-		self.h_function_l2 = nn.Linear(3, classify_num)
+		self.h_function_l1 = nn.Linear(4*d3, 10)
+		self.h_function_l2 = nn.Linear(10, classify_num)
 		#配置
 		self.gpu = use_gpu
 		self.loss = nn.CrossEntropyLoss(reduce=True, size_average=True)
-		self.opt = optim.SGD(self.parameters(), lr=0.1)
+		self.opt = optim.SGD(self.parameters(), lr=learning_rate)
 		pass
 	
 	def init_hidden(self, dim, batch_size):
@@ -70,8 +72,13 @@ class NSMN(nn.Module):
 		m = F.relu(self.h_function_l2(m))
 		m = F.softmax(m, dim=1)
 		return m
-
-	def train_batch(self, batch_u, batch_v, batch_tags, learning_rate = 0.1):
+	
+	#可外部调用
+	#训练一个batch [batch_size, seq_len, embed_size] input is numpy array
+	def train_batch(self, samples_u, samples_v, sample_tags):
+		batch_u = torch.from_numpy(samples_u).float()
+		batch_v = torch.from_numpy(samples_v).float()
+		batch_tags = torch.from_numpy(sample_tags).long()
 		batch_size, _, _ =batch_u.size() 
 		
 		self.zero_grad()
@@ -79,25 +86,47 @@ class NSMN(nn.Module):
 		loss = self.loss(res, batch_tags)
 		loss.backward()
 		self.opt.step()
+		return loss
+	#infernce [seq_len, embed_size] input is numpy array
+	def inference_once(self, sample_u, sample_v):
+		inference_u = torch.from_numpy(sample_u[np.newaxis,:]).float()
+		inference_v = torch.from_numpy(sample_v[np.newaxis,:]).float()
+
+		res = self.forward(inference_u, inference_v, 1)
+		res = res.detach().numpy()
+		return res[0]
+
+	def save_model(self, path):
+		torch.save(self.state_dict(), path)
+		return
+
+	def load_model(self, path):
+		self.load_state_dict(torch.load(path))
 		return
 
 if __name__ == '__main__':
-	tag1 = torch.tensor([1,1,1,1,1,1,1,1,1,1]).cuda()
-	tag2 = torch.tensor([0,0,0,0,0,0,0,0,0,0]).cuda()
-	model = NSMN(5,4,4,3,hidden_dim = 3, lstm_layers = 2, classify_num = 2, use_gpu = True).cuda()
+	tag1 = np.array([1,1,1,1,1,1,1,1,1,1])
+	tag2 = np.array([0,0,0,0,0,0,0,0,0,0])
+	model = NSMN(5,4,4,3,hidden_dim = 3, lstm_layers = 3, classify_num = 2)
 
-	u = torch.rand(10,4,5).cuda()
-	v = torch.rand(10,4,5).cuda()
+	u = np.random.rand(10,4,5)
+	v = np.random.rand(10,4,5)
 
-	new_u = torch.cat((u,u),0)
-	new_v = torch.cat((u,v),0)
-	tag = torch.cat((tag1,tag2),0)
-	for epoch in range(10):	
-		model.train_batch(new_u, new_v, tag)
+	new_u = np.concatenate((u,u), axis = 0)
+	new_v = np.concatenate((u,v), axis = 0)
+	tag = np.concatenate((tag1,tag2), axis = 0)
+	for epoch in range(2000):	
+		loss = model.train_batch(u, v, tag2)
+		if epoch%50 == 0:
+			print(epoch,": || loss:", loss)
 
-	res = model(u,v,10)
+	#model.load_model("./Net/trainedModel/testModel.pyt")
+	
+	test_u = np.random.rand(4,5)
+	test_v = np.random.rand(4,5)
+	res = model.inference_once(test_u, test_v)
 	print(res)
-	res = model(u,u,10)
-	print(res)
+
+	model.save_model("./Net/trainedModel/testModel.pyt")
 
 	pass
