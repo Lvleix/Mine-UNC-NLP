@@ -6,7 +6,7 @@ import numpy as np
 
 class NSMN(nn.Module):
 	#内部方法
-	def __init__(self, d0, d1, d2, d3, hidden_dim = 3, lstm_layers = 1, classify_num = 2, use_gpu = False, learning_rate = 0.01):
+	def __init__(self, d0, d1, d2, d3, hidden_dim = 3, h_function_hidden_dim = 10, lstm_layers = 1, classify_num = 2, use_gpu = False, learning_rate = 0.01):
 		super(NSMN, self).__init__()
 		self.embedding_dim = d0
 		#输出层类别数
@@ -25,8 +25,8 @@ class NSMN(nn.Module):
 		self.matching_lstm = nn.LSTM(d2, d3, batch_first = True, num_layers = lstm_layers)
 		#仿射函数
 		self.f_function = nn.Linear(4*d1, d2)
-		self.h_function_l1 = nn.Linear(4*d3, 10)
-		self.h_function_l2 = nn.Linear(10, classify_num)
+		self.h_function_l1 = nn.Linear(4*d3, h_function_hidden_dim)
+		self.h_function_l2 = nn.Linear(h_function_hidden_dim, classify_num)
 		#配置
 		self.gpu = use_gpu
 		self.loss = nn.CrossEntropyLoss(reduce=True, size_average=True)
