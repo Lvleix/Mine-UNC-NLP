@@ -13,6 +13,11 @@ def pipeline(mode="adversarial improve", argv=None):
         print("Invalid mode")
         return
 
+    # if programme exits with error code 0xC00000FD on windows system,
+    # it means stack overflow
+    # then you can use the code below to fix it
+    #sys.setrecursionlimit(100000)
+
     spath = os.path.dirname(__file__)
     mpath = os.path.dirname(spath)
     wpath = mpath + "/wiki-pages"
@@ -180,7 +185,7 @@ def pipeline(mode="adversarial improve", argv=None):
                                                  cla_veri_model, 1)
         cla_veri_class.train()
         for iter in range(argv.get("iters",default_argv["iters"]) if argv is not None else default_argv["iters"]):
-            print("%dth iteration of adversarial sample training")
+            print("%dth iteration of adversarial sample training" % iter)
             print("Generating doc retr adversarial samples ...")
             doc_retr_class.add_adversarial_data()
             print("Generating sen sele adversarial samples ...")
