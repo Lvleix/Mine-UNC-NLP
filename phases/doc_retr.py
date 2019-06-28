@@ -9,7 +9,7 @@ def sm(l, i):
     return math.exp(l[i])/sum([math.exp(ele) for ele in l])
 
 class doc_retr_train():
-    def __init__(self, train_data, wikis, embedding_class, model_path, epoches = 1, batch_size=128, embedding_size=50):
+    def __init__(self, train_data, wikis, embedding_class, model_path, epoches = 1, batch_size=128, embedding_size=50, mode="demo"):
         self.train_data = train_data
         self.wikis = wikis
         self.embedding_class = embedding_class
@@ -18,10 +18,16 @@ class doc_retr_train():
         self.embedding_size = embedding_size
         self.epoches = epoches
         self.pad = [[0. for _ in range(self.embedding_size)]]
-        self.NSMN = SemanticNet.NSMN(embedding_size,3,3,3,hidden_dim=3,lstm_layers=3,classify_num=2)
+        if mode in ["demo"]:
+            self.NSMN = SemanticNet.NSMN(embedding_size,3,3,3,hidden_dim=3,lstm_layers=3,classify_num=2)
+        else:
+            self.NSMN = SemanticNet.NSMN(embedding_size, 40, 40, 30, hidden_dim=128, lstm_layers=3, classify_num=2)
         self.dataset1 = []
         self.dataset2 = []
         self.labelset = []
+        self.adversarial_databatches1 = []
+        self.adversarial_databatches2 = []
+        self.adversarial_labelbatches = []
         for data in self.train_data:
             evids = data["evidence"][0]
             for evid in evids:
@@ -41,11 +47,17 @@ class doc_retr_train():
         print("train data process complete")
         print(len(self.train_data),len(self.dataset1),len(self.dataset2),len(self.labelset))
 
-    def train(self):
+    def train(self,adversarial_train=False):
         for epoch in range(self.epoches):
             for i, (data1_batch, data2_batch, label_batch) in enumerate(self.get_batches(self.batch_size,self.pad)):
                 loss = self.NSMN.train_batch(data1_batch,data2_batch,label_batch)
                 print("Epoch %d batch %d: loss %s" % (epoch,i,float(loss)))
+            if adversarial_train:
+                for i in range(len(self.adversarial_databatches1)):
+                    loss = self.NSMN.train_batch(self.adversarial_databatches1[i],
+                                                 self.adversarial_databatches2[i],
+                                                 self.adversarial_labelbatches[i])
+                    print("Epoch %d adversarial batch %d: loss %s" % (epoch, i, float(loss)))
         self.NSMN.save_model(self.model_path)
 
 
@@ -70,12 +82,23 @@ class doc_retr_train():
 
             yield pad_data1_batch_embedding, pad_data2_batch_embedding, label_batch
 
+    def add_adversarial_data(self):
+        for i, (data1_batch, data2_batch, label_batch) in enumerate(self.get_batches(self.batch_size, self.pad)):
+            u,v = self.NSMN.generate_attack_sample(data1_batch,data2_batch,label_batch)
+            self.adversarial_databatches1.append(u)
+            self.adversarial_databatches2.append(v)
+            self.adversarial_labelbatches.append(label_batch)
+            print("\tbatch %d" % i)
+
 
 class doc_retr_infer():
-    def __init__(self, wikis, embedding_class, model, embedding_size=50):
+    def __init__(self, wikis, embedding_class, model, embedding_size=50, mode="demo"):
         self.wikis = wikis
         self.embedding_class = embedding_class
-        self.NSMN = SemanticNet.NSMN(embedding_size,3,3,3,hidden_dim=3,lstm_layers=3,classify_num=2)
+        if mode in ["demo"]:
+            self.NSMN = SemanticNet.NSMN(embedding_size,3,3,3,hidden_dim=3,lstm_layers=3,classify_num=2)
+        else:
+            self.NSMN = SemanticNet.NSMN(embedding_size, 40, 40, 30, hidden_dim=128, lstm_layers=3, classify_num=2)
         self.load_model(model)
 
 

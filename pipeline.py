@@ -1,4 +1,5 @@
 import os
+import sys
 from phases import doc_retr
 from phases import sen_sele
 from phases import cla_veri
@@ -7,10 +8,11 @@ import Net.SemanticNet
 import embedding_util
 import embedding_util.glove_embedding as glove_embedding
 
-def pipeline(mode="test"):
-    if mode not in ["train","infer","test"]:
+def pipeline(mode="adversarial improve", argv=None):
+    if mode not in ["train","infer","test","adversarial improve","debug","debug no ad"]:
         print("Invalid mode")
         return
+
     spath = os.path.dirname(__file__)
     mpath = os.path.dirname(spath)
     wpath = mpath + "/wiki-pages"
@@ -20,58 +22,87 @@ def pipeline(mode="test"):
     print("read in wikis ... ")
     files = os.listdir(wpath)
     wikis = {}
-    for file in files:
+    if mode in ["debug","debug no ad"]:
+        # using small amount of data
+        for file in files:
 
-        #if file not in ["wiki-071.jsonl","wiki-072.jsonl","wiki-073.jsonl","wiki-074.jsonl","wiki-075.jsonl",
-        #                "wiki-076.jsonl","wiki-077.jsonl","wiki-078.jsonl","wiki-079.jsonl","wiki-080.jsonl"]:
-        #    continue
-        if file not in ["wiki-071.jsonl"]:
-            continue
-
-        print(file)
-        f = open(wpath+"/"+file, "r")
-        for line in f:
-            wiki = eval(line)
-            if wiki.get("id", "") == "":
+            #if file not in ["wiki-071.jsonl","wiki-072.jsonl","wiki-073.jsonl","wiki-074.jsonl","wiki-075.jsonl",
+            #                "wiki-076.jsonl","wiki-077.jsonl","wiki-078.jsonl","wiki-079.jsonl","wiki-080.jsonl"]:
+            #    continue
+            if file not in ["wiki-071.jsonl"]:
                 continue
-            lines = wiki.get("lines", "")
-            if lines == "":
-                wikis[wiki["id"]] = [""]
-            else:
-                wikis[wiki["id"]] = [sen.split("\t")[1] if len(sen.split("\t")) >= 2 else "" for sen in lines.split("\n")]
-        f.close()
-    print("wiki dict completed. ")
-    # " " == "_" and "(" == "-LRB-" and ")" == "-RRB-"
-    # "Savages (band)" == "Savages_-LRB-band-RRB-"
 
-    print("read in data")
-    train_data = []
-    ccc=0
-    with open(mpath+"/train.jsonl","r") as f:
-        for line in f:
-            td = eval(line.replace("null","''"))
-            if ccc < 500 and td["verifiable"] == "NOT VERIFIABLE":
+            print(file)
+            f = open(wpath+"/"+file, "r")
+            for line in f:
+                wiki = eval(line)
+                if wiki.get("id", "") == "":
+                    continue
+                lines = wiki.get("lines", "")
+                if lines == "":
+                    wikis[wiki["id"]] = [""]
+                else:
+                    wikis[wiki["id"]] = [sen.split("\t")[1] if len(sen.split("\t")) >= 2 else "" for sen in lines.split("\n")]
+            f.close()
+        print("wiki dict completed. ")
+        # " " == "_" and "(" == "-LRB-" and ")" == "-RRB-"
+        # "Savages (band)" == "Savages_-LRB-band-RRB-"
+
+        print("read in data")
+        train_data = []
+        ccc=0
+        with open(mpath+"/train.jsonl","r") as f:
+            for line in f:
+                td = eval(line.replace("null","''"))
+                if ccc < 500 and td["verifiable"] == "NOT VERIFIABLE":
+                    train_data.append(td)
+                    ccc += 1
+                    continue
+                evids = td["evidence"][0]
+                flag = 0
+                for evid in evids:
+                    if evid[2] not in wikis:
+                        flag = 1
+                if flag == 1:
+                    continue
                 train_data.append(td)
-                ccc += 1
-                continue
-            evids = td["evidence"][0]
-            flag = 0
-            for evid in evids:
-                if evid[2] not in wikis:
-                    flag = 1
-            if flag == 1:
-                continue
-            train_data.append(td)
-            #train_data = [eval(line.replace("null","''")) for line in f if eval(line.replace("null","''"))[]]
-    print(len(train_data))
+                #train_data = [eval(line.replace("null","''")) for line in f if eval(line.replace("null","''"))[]]
+        print(len(train_data))
 
-    with open(mpath+"/shared_task_dev.jsonl","r") as f:
-    #with open(spath + "/new_dev_set.jsonl", "r") as f:
-        dev_data = [eval(line.replace("null","''")) for line in f]
+        with open(mpath+"/shared_task_dev.jsonl","r") as f:
+        #with open(spath + "/new_dev_set.jsonl", "r") as f:
+            dev_data = [eval(line.replace("null","''")) for line in f]
+    else:
+        for file in files:
+            print("reading file",file)
+            f = open(wpath + "/" + file, "r")
+            for line in f:
+                wiki = eval(line)
+                if wiki.get("id", "") == "":
+                    continue
+                lines = wiki.get("lines", "")
+                if lines == "":
+                    wikis[wiki["id"]] = [""]
+                else:
+                    wikis[wiki["id"]] = [sen.split("\t")[1] if len(sen.split("\t")) >= 2 else "" for sen in
+                                         lines.split("\n")]
+            f.close()
+        print("wiki dict completed. ")
+        # " " == "_" and "(" == "-LRB-" and ")" == "-RRB-"
+        # "Savages (band)" == "Savages_-LRB-band-RRB-"
+
+        print("read in data")
+        train_data = []
+        ccc = 0
+        with open(mpath + "/train.jsonl", "r") as f:
+            train_data = [eval(line.replace("null","''")) for line in f]
+
+        with open(mpath + "/shared_task_dev.jsonl", "r") as f:
+            dev_data = [eval(line.replace("null", "''")) for line in f]
 
     model_path = spath+"/model/"
 
-    if mode == "train":
+    if mode in ["train","debug no ad"]:
         doc_retr_model = model_path+"doc_retr_model/doc_retr_model.pyt"
         sen_sele_model = model_path+"sen_sele_model/sen_sele_model.pyt"
         cla_veri_model = model_path+"cla_veri_model/cla_veri_model.pyt"
@@ -132,9 +163,43 @@ def pipeline(mode="test"):
             if flag == 1:
                 rights += 1
         print("Acc:",rights/counts)
+    elif mode in ["adversarial improve","debug"]:
+        default_argv = {"iters":1}
+
+        doc_retr_model = model_path + "doc_retr_model/doc_retr_model.pyt"
+        sen_sele_model = model_path + "sen_sele_model/sen_sele_model.pyt"
+        cla_veri_model = model_path + "cla_veri_model/cla_veri_model.pyt"
+        print("doc retr")
+        doc_retr_class = doc_retr.doc_retr_train(train_data, wikis, embedding_class, doc_retr_model, 1)
+        doc_retr_class.train()
+        print("sen sele")
+        sen_sele_class = sen_sele.sen_sele_train(train_data, wikis, embedding_class, sen_sele_model, 1)
+        sen_sele_class.train()
+        print("cla veri")
+        cla_veri_class = cla_veri.cla_veri_train(train_data, wikis, embedding_class, doc_retr_model, sen_sele_model,
+                                                 cla_veri_model, 1)
+        cla_veri_class.train()
+        for iter in range(argv.get("iters",default_argv["iters"]) if argv is not None else default_argv["iters"]):
+            print("%dth iteration of adversarial sample training")
+            print("Generating doc retr adversarial samples ...")
+            doc_retr_class.add_adversarial_data()
+            print("Generating sen sele adversarial samples ...")
+            sen_sele_class.add_adversarial_data()
+            print("Generating cla veri adversarial samples ...")
+            cla_veri_class.add_adversarial_data()
+            print("Adversarial sample adding complete")
+            print("Retrain ...")
+            print("doc retr")
+            doc_retr_class.train(adversarial_train=True)
+            print("sen sele")
+            sen_sele_class.train(adversarial_train=True)
+            print("cla veri")
+            cla_veri_class.train(adversarial_train=True)
+
+
 
 if __name__ == "__main__":
-    pipeline("train")
+    pipeline("debug")
 
 
 
