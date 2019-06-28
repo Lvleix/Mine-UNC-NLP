@@ -104,15 +104,16 @@ class NSMN(nn.Module):
 		self.load_state_dict(torch.load(path))
 		return
 
-	def generate_attack_sample(self, sample_u, sample_v, tag, epsilon = 0.3):
-		inference_u = torch.from_numpy(sample_u[np.newaxis,:]).float()
-		inference_v = torch.from_numpy(sample_v[np.newaxis,:]).float()
+	def generate_attack_sample(self, samples_u, samples_v, tag, epsilon = 0.3):
+		inference_u = torch.from_numpy(samples_u).float()
+		inference_v = torch.from_numpy(samples_v).float()
 		inference_tag = torch.from_numpy(tag).long()
+		batch_size, _, _ =inference_u.size() 
 
 		inference_u.requires_grad = True
 		inference_v.requires_grad = True
 
-		res = self.forward(inference_u, inference_v, 1)
+		res = self.forward(inference_u, inference_v, batch_size)
 		loss = self.loss(res, inference_tag)
 		self.zero_grad()
 		loss.backward()
@@ -123,45 +124,50 @@ class NSMN(nn.Module):
 		attack_u = inference_u + epsilon * u_grad.sign()
 		attack_v = inference_v + epsilon * v_grad.sign()
 
-		return attack_u.detach().numpy()[0], attack_v.detach().numpy()[0]
+		return attack_u.detach().numpy(), attack_v.detach().numpy()
 
 if __name__ == '__main__':
 	#for test
 	tag1 = np.array([1,1,1,1,1,1,1,1,1,1])
 	tag2 = np.array([0,0,0,0,0,0,0,0,0,0])
 	model = NSMN(5,4,4,3,hidden_dim = 3, lstm_layers = 3, classify_num = 2)
+	model.load_model("./Net/trainedModel/testModel.pyt")
 	tag = np.concatenate((tag1,tag2), axis = 0)
 
-	for epoch in range(1000):
+	for epoch in range(0):
 		u = np.random.rand(10,4,5)
 		v = np.random.rand(10,4,5)
 
 		new_u = np.concatenate((u,u), axis = 0)
 		new_v = np.concatenate((u,v), axis = 0)
 		
-		loss = model.train_batch(new_u, new_v, tag)
+		loss = model.train_batch(u, u, tag1)
 		if epoch%50 == 0:
 			print(epoch,": || loss:", loss)
 
-	#model.load_model("./Net/trainedModel/testModel.pyt")
 	
-	test_u = np.random.rand(4,5)
+	'''test_u = np.random.rand(4,5)
 	test_v = np.random.rand(4,5)
 	res = model.inference_once(test_u, test_v)
 	print(res)
 	res = model.inference_once(test_u, test_u)
-	print(res)
+	print(res)'''
 
-	model.save_model("./Net/trainedModel/testModel.pyt")
+	u = np.random.rand(10,4,5)
+	v = np.random.rand(10,4,5)
+	attack_u, attack_v = model.generate_attack_sample(u, v, tag1, epsilon = 0.8)
+	print(u)
+	print(attack_u)
+	#model.save_model("./Net/trainedModel/testModel.pyt")
 
-	attack_u, attack_v = model.generate_attack_sample(test_u, test_v, np.array([0]))
+	'''attack_u, attack_v = model.generate_attack_sample(test_u, test_v, np.array([0]))
 	res = model.inference_once(attack_u, attack_u)
 	print(res, "----")
-	for i in range(100):
+	for i in range(1):
 		attack_u, attack_v = model.generate_attack_sample(attack_u, attack_v, np.array([0]), epsilon = 0.8)
 		res = model.inference_once(attack_u, attack_u)
 		if i % 20 == 0:
-			print(res)
+			print(res)'''
 	#grad_u = torch.rand(3,4,5)
 	#grad_v = torch.rand(3,4,5)
 	#res = model.forward(grad_u,grad_v,3)
